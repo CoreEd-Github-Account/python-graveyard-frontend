@@ -1,10 +1,11 @@
-// app\admin\super-admin\graves\view\page.tsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getGravesWithInformers, eraseGrave, type GraveWithInformerData } from "@/services/graves";
 import { useModulePermissions } from "@/hooks/usePermissions";
+
+const PUBLIC_SOURCE_LABEL = "Public Website Reservation";
 
 type SearchField =
   | "deceased_name"
@@ -12,27 +13,17 @@ type SearchField =
   | "gender"
   | "identification_number"
   | "date_of_death"
-  | "grave_id"
-  | "zone_id"
   | "informer_full_name"
-  | "informer_cnic"
-  | "form_received_by";
+  | "informer_cnic";
 
-const SEARCH_FIELDS: {
-  value: SearchField;
-  label: string;
-  type: "text" | "select" | "date" | "dynamic-select";
-}[] = [
+const SEARCH_FIELDS: { value: SearchField; label: string; type: "text" | "select" | "date" }[] = [
   { value: "deceased_name", label: "Deceased Name", type: "text" },
   { value: "father_or_husband_name", label: "Father/Husband Name", type: "text" },
   { value: "gender", label: "Gender", type: "select" },
   { value: "identification_number", label: "Identification Number", type: "text" },
   { value: "date_of_death", label: "Date of Death", type: "date" },
-  { value: "grave_id", label: "Grave ID", type: "text" },
-  { value: "zone_id", label: "Zone", type: "text" },
   { value: "informer_full_name", label: "Informer Full Name", type: "text" },
   { value: "informer_cnic", label: "Informer CNIC", type: "text" },
-  { value: "form_received_by", label: "Source / Form Received By", type: "dynamic-select" },
 ];
 
 function getFieldValue(grave: GraveWithInformerData, field: SearchField): string {
@@ -43,21 +34,15 @@ function getFieldValue(grave: GraveWithInformerData, field: SearchField): string
   return String(value ?? "");
 }
 
-export default function ViewGravesPage() {
+export default function PublicReservationDataPage() {
   const router = useRouter();
-  const { permissions, loading: permissionsLoading } = useModulePermissions("graves");
+  const { permissions } = useModulePermissions("graves");
 
-  // Graves
   const [graves, setGraves] = useState<GraveWithInformerData[]>([]);
-
-  // Loading and error
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  // Erase
   const [erasingId, setErasingId] = useState<string | null>(null);
 
-  // Search
   const [searchField, setSearchField] = useState<SearchField | "">("");
   const [searchTerm, setSearchTerm] = useState("");
   const [appliedSearch, setAppliedSearch] = useState<{ field: SearchField; term: string } | null>(
@@ -70,21 +55,8 @@ export default function ViewGravesPage() {
       .catch((err) => {
         setError(err instanceof Error ? err.message : "Something went wrong.");
       })
-      .finally(() => {
-        setLoading(false);
-      });
+      .finally(() => setLoading(false));
   }, []);
-
-  // Unique values actually present in the data — always accurate, no extra
-  // API call, and naturally includes past staff/roles even if since renamed
-  // or deleted, since this is a stored string, not a live FK lookup.
-  const formReceivedByOptions = useMemo(() => {
-    const values = new Set<string>();
-    graves.forEach((g) => {
-      if (g.form_received_by) values.add(g.form_received_by);
-    });
-    return Array.from(values).sort();
-  }, [graves]);
 
   const handleErase = async (id: string, deceasedName: string) => {
     const confirmed = window.confirm(
@@ -125,20 +97,21 @@ export default function ViewGravesPage() {
 
   const activeFieldConfig = SEARCH_FIELDS.find((f) => f.value === searchField);
 
+  const publicGraves = graves.filter((g) => g.form_received_by === PUBLIC_SOURCE_LABEL);
+
   const displayedGraves = appliedSearch
-    ? graves.filter((grave) =>
+    ? publicGraves.filter((grave) =>
         getFieldValue(grave, appliedSearch.field).toLowerCase().includes(appliedSearch.term)
       )
-    : graves;
-
-  // View is always shown (that's how anyone reached this page at all).
-  // Edit/Erase buttons are gated individually below.
-  const showActionsColumn = true;
+    : publicGraves;
 
   return (
     <div>
-      {/* Page Title */}
-      <h1 className="text-2xl font-semibold">View Graves</h1>
+      <h1 className="text-2xl font-semibold">Public Reservation Data</h1>
+      <p className="mt-1 text-sm text-gray-500">
+        Grave records submitted through the public website's Reservation form, awaiting staff
+        review and plot assignment.
+      </p>
 
       {/* Search */}
       <div className="mt-6 flex flex-wrap items-center gap-3">
@@ -167,19 +140,6 @@ export default function ViewGravesPage() {
                 <option value="male">Male</option>
                 <option value="female">Female</option>
                 <option value="others">Others</option>
-              </select>
-            ) : activeFieldConfig?.type === "dynamic-select" ? (
-              <select
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="h-11 w-64 rounded-xl border border-gray-200 px-4 text-sm outline-none focus:border-black"
-              >
-                <option value="">Select source...</option>
-                {formReceivedByOptions.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
               </select>
             ) : activeFieldConfig?.type === "date" ? (
               <input
@@ -217,89 +177,60 @@ export default function ViewGravesPage() {
         )}
       </div>
 
-      {/* Loading */}
-      {loading && <p className="mt-6 text-sm text-gray-500">Loading graves...</p>}
+      {loading && <p className="mt-6 text-sm text-gray-500">Loading public reservations...</p>}
 
-      {/* Error */}
       {error && (
         <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-600">
           {error}
         </div>
       )}
 
-      {/* Graves Table */}
       {!loading && !error && (
         <div className="mt-6 overflow-x-auto rounded-xl border border-gray-200">
           <table className="min-w-full whitespace-nowrap text-sm">
-            {/* Table Header */}
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-4 py-3 text-left font-medium">Grave ID</th>
-                <th className="px-4 py-3 text-left font-medium">Old Grave ID</th>
                 <th className="px-4 py-3 text-left font-medium">Deceased Name</th>
-                <th className="px-4 py-3 text-left font-medium">Zone</th>
-                <th className="px-4 py-3 text-left font-medium">Deceased Date of Death</th>
-                <th className="px-4 py-3 text-left font-medium">Deceased Gender</th>
-                <th className="px-4 py-3 text-left font-medium">Deceased Native Place</th>
-                <th className="px-4 py-3 text-left font-medium">Record Created At</th>
+                <th className="px-4 py-3 text-left font-medium">Date of Death</th>
+                <th className="px-4 py-3 text-left font-medium">Gender</th>
+                <th className="px-4 py-3 text-left font-medium">Native Place</th>
+                <th className="px-4 py-3 text-left font-medium">Submitted At</th>
                 <th className="px-4 py-3 text-left font-medium">Informer Name</th>
-                <th className="px-4 py-3 text-left font-medium">Informer Relationship</th>
+                <th className="px-4 py-3 text-left font-medium">Informer Contact</th>
+                <th className="px-4 py-3 text-left font-medium">Relationship</th>
                 <th className="px-4 py-3 text-left font-medium">Actions</th>
               </tr>
             </thead>
 
-            {/* Table Body */}
             <tbody>
               {displayedGraves.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="px-4 py-6 text-center text-gray-500">
-                    {appliedSearch ? "No matching graves found." : "No graves found."}
+                  <td colSpan={9} className="px-4 py-6 text-center text-gray-500">
+                    {appliedSearch
+                      ? "No matching public reservations found."
+                      : "No public reservations yet."}
                   </td>
                 </tr>
               ) : (
                 displayedGraves.map((grave) => (
                   <tr key={grave.id} className="border-t border-gray-100">
-                    {/* Grave ID */}
-                    <td className="px-4 py-3">{grave.grave_id ?? "—"}</td>
-
-                    {/* Old Grave ID */}
-                    <td className="px-4 py-3">{grave.old_grave_id ?? "—"}</td>
-
-                    {/* Deceased Name */}
                     <td className="px-4 py-3">
                       {grave.deceased_name} {grave.deceased_surname ?? ""}
                     </td>
-
-                    {/* Zone */}
-                    <td className="px-4 py-3">{grave.zone_id ?? "—"}</td>
-
-                    {/* Date of Death */}
                     <td className="px-4 py-3">{grave.date_of_death ?? "—"}</td>
-
-                    {/* Gender */}
                     <td className="px-4 py-3">{grave.gender ?? "—"}</td>
-
-                    {/* Native Place */}
                     <td className="px-4 py-3">{grave.native_place ?? "—"}</td>
-
-                    {/* Created At */}
                     <td className="px-4 py-3 text-gray-500">
                       {new Date(grave.created_at).toLocaleString(undefined, {
                         dateStyle: "short",
                         timeStyle: "short",
                       })}
                     </td>
-
-                    {/* Informer Name */}
                     <td className="px-4 py-3">{grave.informer_full_name ?? "—"}</td>
-
-                    {/* Relationship */}
+                    <td className="px-4 py-3">{grave.informer_contact_number ?? "—"}</td>
                     <td className="px-4 py-3">{grave.relationship_with_deceased ?? "—"}</td>
-
-                    {/* Actions */}
                     <td className="px-4 py-3">
                       <div className="flex gap-2">
-                        {/* View — always available to anyone who can reach this page */}
                         <button
                           type="button"
                           onClick={() =>

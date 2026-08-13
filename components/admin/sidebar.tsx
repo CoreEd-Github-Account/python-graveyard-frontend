@@ -18,6 +18,7 @@ const menuItems = [
     subItems: [
       { label: "View Graves", href: "/admin/super-admin/graves/view" },
       { label: "Add Grave", href: "/admin/super-admin/graves/add" },
+      { label: "Public Reservation Data", href: "/admin/super-admin/graves/public-reservations" },
       { label: "Deleted Graves", href: "/admin/super-admin/graves/deleted" },
     ],
   },
