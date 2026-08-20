@@ -1,5 +1,3 @@
-// services/graves.ts
-
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
 
 export type IdentificationType = "cnic" | "passport" | "nicop" | "other";
@@ -42,6 +40,79 @@ export async function getGraves(): Promise<GraveData[]> {
   return response.json();
 }
 
+// Fields the PUBLIC search endpoint (/graves/search) accepts. Kept in
+// sync with SEARCHABLE_FIELDS in app/controllers/grave_controller.py.
+export type GraveSearchField =
+  | "deceased_name"
+  | "deceased_surname"
+  | "father_or_husband_name"
+  | "gender"
+  | "date_of_death";
+
+export interface GravePaginatedResponse {
+  items: GraveData[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
+export async function searchGraves(params: {
+  searchField: GraveSearchField;
+  searchTerm: string;
+  page?: number;
+  pageSize?: number;
+}): Promise<GravePaginatedResponse> {
+  const { searchField, searchTerm, page = 1, pageSize = 20 } = params;
+
+  const query = new URLSearchParams({
+    search_field: searchField,
+    search_term: searchTerm,
+    page: String(page),
+    page_size: String(pageSize),
+  });
+
+  const response = await fetch(`${API_BASE_URL}/graves/search?${query.toString()}`, {
+    method: "GET",
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => null);
+    throw new Error(errorData?.detail ?? "Failed to search graves.");
+  }
+
+  return response.json();
+}
+
+// Public-facing type-ahead suggestions (/graves/suggestions) - reuses the
+// same GraveSuggestionField shape as the admin suggestions endpoint, since
+// both only ever support "deceased_name" | "deceased_surname".
+export async function getPublicGraveSuggestions(params: {
+  searchField: "deceased_name" | "deceased_surname";
+  searchTerm: string;
+  limit?: number;
+}): Promise<string[]> {
+  const { searchField, searchTerm, limit = 8 } = params;
+
+  const query = new URLSearchParams({
+    search_field: searchField,
+    search_term: searchTerm,
+    limit: String(limit),
+  });
+
+  const response = await fetch(`${API_BASE_URL}/graves/suggestions?${query.toString()}`, {
+    method: "GET",
+  });
+
+  if (!response.ok) {
+    // Fail quietly - a suggestion dropdown not loading shouldn't show an
+    // error banner on the page.
+    return [];
+  }
+
+  return response.json();
+}
+
 
 export interface GraveWithInformerData {
   id: string;
@@ -72,6 +143,109 @@ export interface GraveWithInformerData {
   informer_city: string | null;
   informer_country: string | null;
   form_received_by: string | null;
+}
+
+export async function getGravesWithInformers(): Promise<GraveWithInformerData[]> {
+  const response = await fetch(`${API_BASE_URL}/graves/with-informers`, {
+    method: "GET",
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => null);
+    throw new Error(errorData?.detail ?? "Failed to fetch graves.");
+  }
+
+  return response.json();
+}
+
+// Fields the ADMIN search bar (/admin/super-admin/graves/view) accepts.
+// Kept in sync with ADMIN_SEARCH_FIELDS in app/controllers/grave_controller.py.
+export type AdminGraveSearchField =
+  | "deceased_name"
+  | "deceased_surname"
+  | "father_or_husband_name"
+  | "gender"
+  | "identification_number"
+  | "date_of_death"
+  | "date_buried"
+  | "grave_id"
+  | "zone_id"
+  | "informer_full_name"
+  | "informer_cnic";
+
+export interface GraveWithInformerPaginatedResponse {
+  items: GraveWithInformerData[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
+export async function searchGravesWithInformers(params: {
+  searchField?: AdminGraveSearchField;
+  searchTerm?: string;
+  searchTermTo?: string;
+  page?: number;
+  pageSize?: number;
+}): Promise<GraveWithInformerPaginatedResponse> {
+  const { searchField, searchTerm, searchTermTo, page = 1, pageSize = 20 } = params;
+
+  const query = new URLSearchParams({
+    page: String(page),
+    page_size: String(pageSize),
+  });
+  // search_field/search_term are optional - admin view shows everything
+  // (paginated) when neither is set. search_term_to is only meaningful
+  // for date_of_death/date_buried, turning the match into a range.
+  if (searchField && searchTerm) {
+    query.set("search_field", searchField);
+    query.set("search_term", searchTerm);
+    if (searchTermTo) {
+      query.set("search_term_to", searchTermTo);
+    }
+  }
+
+  const response = await fetch(`${API_BASE_URL}/graves/with-informers/search?${query.toString()}`, {
+    method: "GET",
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => null);
+    throw new Error(errorData?.detail ?? "Failed to fetch graves.");
+  }
+
+  return response.json();
+}
+
+// Fields the type-ahead suggestion dropdown supports - a small subset of
+// AdminGraveSearchField. Kept in sync with SUGGESTION_FIELDS in
+// app/controllers/grave_controller.py.
+export type GraveSuggestionField = "deceased_name" | "deceased_surname";
+
+export async function getGraveSearchSuggestions(params: {
+  searchField: GraveSuggestionField;
+  searchTerm: string;
+  limit?: number;
+}): Promise<string[]> {
+  const { searchField, searchTerm, limit = 8 } = params;
+
+  const query = new URLSearchParams({
+    search_field: searchField,
+    search_term: searchTerm,
+    limit: String(limit),
+  });
+
+  const response = await fetch(`${API_BASE_URL}/graves/with-informers/suggestions?${query.toString()}`, {
+    method: "GET",
+  });
+
+  if (!response.ok) {
+    // Suggestions are a nice-to-have - fail quietly rather than surfacing
+    // an error banner just because the dropdown couldn't load.
+    return [];
+  }
+
+  return response.json();
 }
 
 
@@ -110,21 +284,18 @@ export interface GraveInformerDetailData {
   form_received_by: string | null;
 }
 
-export async function getGravesWithInformers(): Promise<GraveInformerDetailData[]> {
-  const response = await fetch(`${API_BASE_URL}/graves/with-informers`, {
+export async function getGraveWithInformer(id: string): Promise<GraveInformerDetailData> {
+  const response = await fetch(`${API_BASE_URL}/graves/${id}/with-informer`, {
     method: "GET",
   });
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => null);
-    throw new Error(errorData?.detail ?? "Failed to fetch graves.");
+    throw new Error(errorData?.detail ?? "Failed to fetch grave.");
   }
 
   return response.json();
 }
-
-
-
 
 export interface GraveInformerUpdatePayload {
   grave_id?: number;
@@ -155,19 +326,6 @@ export interface GraveInformerUpdatePayload {
   informer_city?: string;
   informer_country?: string;
   form_received_by?: string;
-}
-
-export async function getGraveWithInformer(id: string): Promise<GraveInformerDetailData> {
-  const response = await fetch(`${API_BASE_URL}/graves/${id}/with-informer`, {
-    method: "GET",
-  });
-
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => null);
-    throw new Error(errorData?.detail ?? "Failed to fetch grave.");
-  }
-
-  return response.json();
 }
 
 export async function updateGraveWithInformer(

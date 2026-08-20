@@ -5,6 +5,23 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { getGraveWithInformer, type GraveInformerDetailData } from "@/services/graves";
 
+function formatDateDDMMYY(dateStr: string | null | undefined): string | null {
+  if (!dateStr) return null;
+  const d = new Date(dateStr);
+  const day = String(d.getDate()).padStart(2, "0");
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const year = String(d.getFullYear()).slice(-2);
+  return `${day}-${month}-${year}`;
+}
+
+function formatDateTimeDDMMYY(dateStr: string | null | undefined): string | null {
+  if (!dateStr) return null;
+  const d = new Date(dateStr);
+  const datePart = formatDateDDMMYY(dateStr);
+  const timePart = d.toLocaleTimeString(undefined, { timeStyle: "short" });
+  return `${datePart}, ${timePart}`;
+}
+
 export default function GraveDetailsPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -64,16 +81,17 @@ export default function GraveDetailsPage() {
       <div className="mt-6">
         <h2 className="mb-2 text-lg font-medium text-gray-900">Deceased / Grave Details</h2>
         <div className="rounded-xl border border-gray-200 px-4">
-          <Row label="Deceased Name" value={`${grave.deceased_name} ${grave.deceased_surname ?? ""}`} />
+          <Row label="Deceased Name" value={grave.deceased_name} />
+          <Row label="Surname" value={grave.deceased_surname} />
           <Row label="Father/Husband Name" value={grave.father_or_husband_name} />
           <Row label="Native Place" value={grave.native_place} />
           <Row label="Gender" value={grave.gender} />
           <Row label="Reason of Death" value={grave.reason_of_death} />
           <Row label="Identification Type" value={grave.identification_type} />
           <Row label="Identification Number" value={grave.identification_number} />
-          <Row label="Date of Birth" value={grave.date_of_birth} />
-          <Row label="Date of Death" value={grave.date_of_death} />
-          <Row label="Date Buried" value={grave.date_buried} />
+          <Row label="Date of Birth" value={formatDateDDMMYY(grave.date_of_birth)} />
+          <Row label="Date of Death" value={formatDateDDMMYY(grave.date_of_death)} />
+          <Row label="Date Buried" value={formatDateDDMMYY(grave.date_buried)} />
           <Row label="Islamic Date of Death" value={grave.islamic_date_of_death} />
           <Row label="Grave ID" value={grave.grave_id} />
           <Row label="Old Grave ID" value={grave.old_grave_id} />
@@ -81,8 +99,8 @@ export default function GraveDetailsPage() {
           <Row label="Neighbor Grave ID 1" value={grave.neighbor_grave_id_1} />
           <Row label="Neighbor Grave ID 2" value={grave.neighbor_grave_id_2} />
           <Row label="Google Map Location" value={grave.google_map_location} />
-          <Row label="Record Created At" value={new Date(grave.created_at).toLocaleString()} />
-          <Row label="Record Updated At" value={new Date(grave.updated_at).toLocaleString()} />
+          <Row label="Record Created At" value={formatDateTimeDDMMYY(grave.created_at)} />
+          <Row label="Record Updated At" value={formatDateTimeDDMMYY(grave.updated_at)} />
         </div>
       </div>
 
